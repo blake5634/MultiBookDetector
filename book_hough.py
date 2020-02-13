@@ -2,11 +2,14 @@ import cv2
 import numpy as np
 import glob as gb
 
-scale = 3
-img_width = int(3000/scale)
-img_height =  int(4000/scale)
-img_width = int(1671)
-img_height =  int(1206)
+import newfcns as nf
+
+#scale = nf.scale
+#scale = 3
+#img_width = int(3000/scale)
+#img_height =  int(4000/scale)
+#img_width = int(1671)
+#img_height =  int(1206)
 
 
 # --------------Hough Transfrom---------
@@ -15,7 +18,7 @@ def pre_process(name):
     img = cv2.imread(name, 0)
     #img_resized = cv2.resize(img, (img_width, img_height))
     img_resized = img.copy()
-    b = 9
+    b = nf.blur_rad
     img_blur = cv2.GaussianBlur(img_resized, (b,b), 0)
     return img_resized, img_blur
 

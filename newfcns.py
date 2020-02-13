@@ -1,38 +1,115 @@
 import cv2
 import numpy as np
 import glob as gb
-
 import matplotlib.pyplot as plt
 
-scale = 3
-img_width = int(3000/scale)
-img_height =  int(4000/scale)
-img_width = int(1671)
-img_height =  int(1206)
-
+scale = 5
+#  following smoothing windows are scaled from here by /scale
+#     values below reflect a nominal image width of 1670
+deriv_win_size = 12      # 20 = 1.2% of image width
+smooth_size= -30     # <0:   do not smooth
+blur_rad = 25
+if blur_rad%2 == 0:
+    blur_rad += 1
+    
+#img_width = int(3000/scale)
+#img_height =  int(4000/scale)
+#img_width = int(1671)
+#img_height =  int(1206)
 
 #
 #  new functions by BH
 #
 ##
 
+#
+#  Apply criteria to gaps
+#
+def Gap_filter(gaps,img, tmin=20, blacklabel=6):
+    img_height=img.shape[0]
+    img_width=img.shape[1]
+    # tmin:        min width pixels
+    # blacklabel:  int label of background black
 
-def Find_edges_line(line):
-    grad = np.gradient(line,2)
-    
-    
-    x = range(len(line))
-    if True:
+    halfway = int(img_height/2)
+    candidates = []
+    for g in gaps:
         #
-        #   plot a graph of original and gradient
-        fig, ax = plt.subplots()  
-        #print(':::: sline: ',type(sline), np.shape(sline))
-        ax = plt.plot(x,line)
-        ax = plt.plot(x,10*grad)
-        #ax = plt.plot(range(len(nf.smooth()),sline))
-        plt.title('line and its gradient')
-        plt.show()
-        
+        #  exclude
+        #
+        # 1) narrow gaps
+        width = abs(g[0]-g[1])
+        if width < tmin:
+            print('found a very narrow gap')
+            continue
+        # 2) gaps that match background
+        values = []
+        for c1 in range(width):
+            col = g[0]+c1-1
+            for r in range(halfway):
+                row = halfway + r -1 
+                if col < img_width:
+                    values.append(img[row,col])
+        (val,cnts) = np.unique(values, return_counts=True)
+        if val[np.argmax(cnts)] == blacklabel:  # background
+            print('found a black gap')
+            continue
+        else: # we didn't exclude this gap
+            candidates.append(g)
+    return candidates
+#
+#
+#
+def Gen_gaplist(cross): 
+    cm1=0
+    gaps = []
+    for c in cross:
+        if c < 0:
+            c = c*-1
+        gaps.append([cm1,c])
+        cm1 = c
+    return gaps
+
+#
+#  neg and pos zero crossings
+#
+
+def Find_crossings(yvals):
+    ym1 = yvals[0]
+    c = []
+    for i,y in enumerate(yvals):
+        if y<0 and ym1>=0:
+            c.append(-i)   # - == neg crossing
+        if y>0 and ym1 <= 0:
+            c.append(i)    #   positive crossing
+        ym1 = y
+    return c
+            
+
+def Est_derivative(yvals, w):
+    if w < 0:
+        return np.gradient(line,2)
+    if w > len(yvals)/2:
+        print(' derivative window {} is too big for {} values.'.format(w,len(yvals)))
+        quit()
+    else:
+        ym1 = yvals[0]
+        dydn = []
+        dn = 1 # for now
+        for y in yvals:
+            dy = y-ym1
+            dydn.append(dy/dn)
+            ym1 = y
+        if w>1:
+            dydn = smooth(dydn, window_len=w, window='hanning')        
+        return dydn
+ 
+    
+def Find_edges_line(line):
+    
+    #grad = np.gradient(line,2)
+    
+    grad = Est_derivative(line, 3)
         
     thresh = 0.1
     edges = []
@@ -58,7 +135,9 @@ def Find_edges_line(line):
 #    return a series of labels
 # 
 
-def Trancept_labeled(lab_img, yval):    
+def Trancept_labeled(lab_img, yval):
+    img_height=img.shape[0]
+    img_width=img.shape[1]    
     r = int(yval)
     result = []
     for c in range(img_width):
@@ -72,6 +151,8 @@ def Trancept_labeled(lab_img, yval):
 #  cluster mean = avg value of pixel labels
 
 def Trancept_bar_labeled(lab_img, yval,bw):    
+    img_height=lab_img.shape[0]
+    img_width=lab_img.shape[1]
     y_val = int(yval) # y=row, x=col
     result = []
     offset = int(bw/2)
@@ -94,6 +175,8 @@ def Trancept_bar_labeled(lab_img, yval,bw):
 #  Cluster colors by K-means
 #
 def KM(img,N):
+    img_height=img.shape[0]
+    img_width=img.shape[1]
     pixels = np.float32(img.reshape(-1, 3))
     n_colors = N
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 200, .05)
@@ -159,11 +242,13 @@ def smooth(x,window_len=11,window='hanning'):
     #print (x)
     assert (len(x) > window_len),"Input vector needs to be bigger than window size."
 
-
     if window_len<3:
         return x
 
-
+    if window_len%2 == 0:
+        print(' smoothing window length must be ODD')
+        quit()
+        
     assert (window in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']), "Window must be: 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'"
 
 
