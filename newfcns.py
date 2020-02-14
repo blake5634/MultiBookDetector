@@ -3,15 +3,16 @@ import numpy as np
 import glob as gb
 import matplotlib.pyplot as plt
 
-scale = 5
+scale = 1
 #  following smoothing windows are scaled from here by /scale
 #     values below reflect a nominal image width of 1670
 deriv_win_size = 12      # 20 = 1.2% of image width
-smooth_size= -30     # <0:   do not smooth
-blur_rad = 25
+smooth_size= 10     # <0:   do not smooth
+blur_rad = 20
 if blur_rad%2 == 0:
     blur_rad += 1
-    
+
+KM_Clusters = 13
 #img_width = int(3000/scale)
 #img_height =  int(4000/scale)
 #img_width = int(1671)
@@ -21,6 +22,15 @@ if blur_rad%2 == 0:
 #  new functions by BH
 #
 ##
+
+##
+##  find properties of an OBB
+##
+#def Obb_props(obb):
+    #d={}
+    
+    
+
 
 #
 #  Apply criteria to gaps
