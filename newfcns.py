@@ -3,16 +3,19 @@ import numpy as np
 import glob as gb
 import matplotlib.pyplot as plt
 
-scale = 1
+scale = 3
 #  following smoothing windows are scaled from here by /scale
 #     values below reflect a nominal image width of 1670
+
 deriv_win_size = 12      # 20 = 1.2% of image width
-smooth_size= 10     # <0:   do not smooth
-blur_rad = 20
+smooth_size= -10     # <0:   do not smooth
+blur_rad = 9
 if blur_rad%2 == 0:
     blur_rad += 1
+KM_Clusters = 10
 
-KM_Clusters = 13
+font = cv2.FONT_HERSHEY_SIMPLEX
+
 #img_width = int(3000/scale)
 #img_height =  int(4000/scale)
 #img_width = int(1671)
@@ -23,13 +26,86 @@ KM_Clusters = 13
 #
 ##
 
-##
-##  find properties of an OBB
-##
-#def Obb_props(obb):
-    #d={}
-    
-    
+#
+#  Get edge score of a line through image
+#
+#   y = mx+b  (y=row, x=col)
+#
+#   img = label_image from KM()
+#   col = col where line interects row 0
+#   w   = window thickness (pixels)
+#   angle th (deg)  w.r.t. row
+def Get_line_score(img,col, w, xintercept, th):
+    print('col: {} w: {} xint: {}, th: {}'.format(col, w,xintercept, th))
+    iw = img.shape[0]
+    ih = img.shape[1]
+    # actual line
+    if col < 1: 
+        return 
+    d2r = 2*np.pi/360.0
+    m0 = np.tan(th*d2r)
+    b0 = -m0/xintercept
+    #window upper bound
+    r = int(w/np.cos((180-th)*d2r))
+    print('m0: {} b0: {} r:{}'.format(m0,b0,r))
+    xbuf = int(-(b0+r)/m0)
+    if col < xbuf or col > (iw - xbuf) or (iw < (2 * xbuf)):
+        print('ignoring col: {}'.format(col))
+        return
+    else:
+        rng = range(xbuf, (iw - xbuf))
+        print('x range: {} -- {}'.format(xbuf, iw-xbuf))
+        labove = []
+        lbelow = []
+        #study pixels above and below line
+        for x in rng:
+            vals_abv = []
+            vals_bel = []
+            y = int(m0*x+b0)
+            if y > ih:
+                continue
+            else:
+                # above the line
+                for y1 in range(y,y+r):
+                    #print('y range: {} -- {}'.format(y,y+r))
+                    if y1 < ih:
+                        vals_abv.append(img[x,y1])
+                for y1 in range(y, y-r):
+                    #print('y range: {} -- {}'.format(y,y-r))
+                    if y1 >=0:
+                        vals_bel.append(img[x,y1])
+        print('{} values above'.format(len(vals_abv)))
+        print('{} values below'.format(len(vals_bel)))
+        x = input('pause ...')
+                    
+                
+            
+#
+#  Check along top for typical bacgkround pixels
+#
+
+##########################
+#
+#   Look across top of image for label of "black"
+#
+def Check_background(lab_image, outfile=False):
+    bls = []
+    wheight = int(lab_image.shape[0]/8)
+    for col in range(lab_image.shape[1]):
+        for r in range(wheight):
+            bls.append(lab_image[r+5,col])
+    labs, cnt = np.unique(bls, return_counts=True)
+    max = np.max(cnt)
+    for l,c in zip(labs,cnt):
+        if c == max:
+            lmax = l
+            break
+    print('Most common label near top: {} ({}%)'.format(lmax, 100*max/np.sum(cnt)))
+    if outfile:
+        f = open('metadata.txt','w')
+        print('dark label, {}'.format(lmax), file=f)
+        f.close()
+    return lmax
 
 
 #
@@ -181,6 +257,27 @@ def Trancept_bar_labeled(lab_img, yval,bw):
         vv_array.append(vertvals)
     return result, vv_array
 
+
+#
+#  generate an image illustrating the KM cluster center colors
+#
+def Gen_cluster_colors(centers):
+    FILLED = -1
+    ih = 600
+    iw = 300
+    img = np.zeros((ih,iw,3), np.uint8)
+    h = int(ih/10)
+    y=0
+    x=0
+    for i in range(len(centers)):
+        col = tuple([int(x) for x in centers[i]])
+        print('Color label: ',col)
+        if i >= 10:
+            break
+        cv2.rectangle(img, (x,y), (iw,y+h), col, FILLED)
+        cv2.putText(img, 'cluster: {}'.format(i), (50, y+50), font, 1, (255, 255, 0), 2, cv2.LINE_AA)
+        y=y + h
+    return img
 #   
 #  Cluster colors by K-means
 #
@@ -195,7 +292,7 @@ def KM(img,N):
     _, counts = np.unique(labels, return_counts=True)
 #And finally the dominant colour is the palette colour which occurs most frequently on the quantized image:
 
-    dominant = centers[np.argmax(counts)]
+    dominant = centers[np.argmax(counts)]  # most common color label found
     
     labeled_image = labels.reshape(img.shape[:-1])
     #print('i  label (n pix)    Pallette')
@@ -211,7 +308,7 @@ def KM(img,N):
     #reshape
     newimg = newimg.reshape(img.shape)
     
-    return [newimg, labeled_image]
+    return [newimg, labeled_image, centers]
 
 
 def smooth(x,window_len=11,window='hanning'):

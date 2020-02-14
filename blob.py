@@ -1,6 +1,7 @@
 
 import cv2
 import numpy as np
+import time as time
 import glob as gb
 from book_hough import *
 import newfcns as nf
@@ -28,8 +29,8 @@ for pic_filename in img_paths:
     #  read in the image
     #
     #img = cv2.imread(pic_filename, cv2.IMREAD_COLOR)
-    img = cv2.imread(pic_filename, cv2.IMREAD_COLOR)
-    ish = img.shape
+    img_orig = cv2.imread(pic_filename, cv2.IMREAD_COLOR)
+    ish = img_orig.shape
     #
     #  scale the image 
     #
@@ -38,7 +39,7 @@ for pic_filename in img_paths:
         
     img_width = int(ish[1]/nf.scale)
     img_height =  int(ish[0]/nf.scale)
-    img1 = cv2.resize(img, (img_width, img_height))
+    img1 = cv2.resize(img_orig, (img_width, img_height))
     
     
           
@@ -88,11 +89,22 @@ for pic_filename in img_paths:
     #  Use KMeans to posterize to N color labels
     #
     N = nf.KM_Clusters
-    img0, label_img = nf.KM(img2,N)   
-    cv2.imshow("labeled KM image", img0)
-    
+    img0, label_img, ctrs = nf.KM(img2,N)   
+    #cv2.imshow("labeled KM image", img0)
+    imct = nf.Gen_cluster_colors(ctrs)
+    cv2.imshow("cluster colors (10 max)",imct)
+    cv2.waitKey(1000)
     nfound = 0
+
+    #
+    #   Find background label
+    #
+    backgnd = nf.Check_background(label_img)
+    
     for lab in range(N):
+        if lab == background:
+            print ('skipping background label: {}'.format(backgnd))
+            continue
         imgx = (label_img==lab).astype(np.uint8)  # change True to 1.0
         imgx = 255*imgx  # 0-255 image
         #lcnt = 0
@@ -182,6 +194,12 @@ for pic_filename in img_paths:
             #print('obb:', obbp)
             
             if drawfl:
+                #
+                # location
+                #            
+                M = cv2.moments(c)
+                cX = int(M["m10"] / M["m00"])
+                cY = int(M["m01"] / M["m00"])
                 #print (rect)
                 print('Properties: ')
                 print('aspect: {:6.2f}  ext: {:6.2f} orient: {:6.2f}'.format(aspect_r,extent, orientation))
@@ -189,6 +207,14 @@ for pic_filename in img_paths:
                 ncont+=1
                 cv2.drawContours(timg, c, -1, (255,0,255),3)
                 cv2.drawContours(timg, [obbp], -1, (0,255,0),3)
+                ob2 = [[ val*nf.scale for val in p]  for p in obbp]
+                ob2 = np.array(obbp)*nf.scale
+                
+                cv2.drawContours(img_orig, [ob2], -1, (0,255,0), 3)
+                xt = nf.scale*cX
+                yt = nf.scale*cY
+                cv2.putText(img_orig, '{}'.format(lab), (xt,yt), nf.font, 1, (255, 255, 0), 2, cv2.LINE_AA)
+
         print(' ...    {} contours remain'.format(ncont))
         nfound += ncont
         
@@ -196,8 +222,15 @@ for pic_filename in img_paths:
             #cv2.imshow("Raw",img1)
             #cv2.waitKey()
             #cv2.destroyAllWindows()
-            title = "Contours Identified/Filtered: lab {}".format(lab)
-            cv2.imshow(title, timg)
-            cv2.waitKey() 
+            title = "Contours Identified/Filtered by label: {}".format(lab)
+            blobwin = 'blobwin'
+            #cv2.imshow(blobwin, timg)
+            cv2.imshow(title, img_orig)
+            cv2.waitKey(500)
+            #time.sleep(5)
+            cv2.destroyWindow(title)
     
     print('{}, {} booktangles detected'.format(pic_filename, nfound) )
+
+    cv2.imshow(title, img_orig)
+    cv2.waitKey(-1)
