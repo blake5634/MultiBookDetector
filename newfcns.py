@@ -26,6 +26,56 @@ font = cv2.FONT_HERSHEY_SIMPLEX
 #
 ##
 
+
+#
+# Convert XY rel LL corner to row, col
+#
+##  from   XY referenced to center of img:
+#
+#                       |Y
+#                       |
+#                       |
+#      -----------------------------------
+#         X             |\
+#                       | (ih/2, iw/2)
+#                       |
+#                       |
+#
+#    to classic image proc coordiates:
+#      0/0------- col ----->
+##      |
+#       row
+#       |
+#       |
+#       V
+##
+def Get_pix_byXY(img,X,Y):
+    #print('Get: {} {}'.format(X,Y))
+    #return (1,1,1)   ######################  TEST
+    irows = img.shape[0]
+    row = int(irows/2)-Y 
+    col = X+int(img.shape[1]/2)
+    #print ('GXY: returning {}'.format(img[row,col]))
+    return(img[row,col])
+
+#
+# convert image ctr XY to X,Y (open CV)
+#
+def XY2iXiY(img,X,Y):
+    row = int(img.shape[0]/2)-Y 
+    col = X+int(img.shape[1]/2)
+    iX = col 
+    iY = row
+    return iX, iY
+#
+# convert image ctr XY to Row, Col 
+#
+def XY2RC(img,X,Y):
+    irows = img.shape[0]
+    row = int(irows/2)-Y 
+    col = X+int(img.shape[1]/2)
+    return row,col
+
 #
 #  Get edge score of a line through image
 #
@@ -35,48 +85,70 @@ font = cv2.FONT_HERSHEY_SIMPLEX
 #   col = col where line interects row 0
 #   w   = window thickness (pixels)
 #   angle th (deg)  w.r.t. row
-def Get_line_score(img,col, w, xintercept, th):
-    print('col: {} w: {} xint: {}, th: {}'.format(col, w,xintercept, th))
-    iw = img.shape[0]
-    ih = img.shape[1]
-    # actual line
-    if col < 1: 
-        return 
-    d2r = 2*np.pi/360.0
+#
+#
+def Get_line_score(img, w, xintercept, th):
+    print('\n\n w: {} xint: {}, th: {}'.format( w,xintercept, th))
+    print(' ---   image shape: {}'.format(np.shape(img)))
+    print('Image sample: {}'.format(img[10,10]))
+    ih = img.shape[0]
+    iw = img.shape[1]
+    assert (xintercept > -iw/2 and xintercept <= iw/2), 'bad xvalue: '+str(xintercept)
+    d2r = 2*np.pi/360.0  #deg to rad
     m0 = np.tan(th*d2r)
-    b0 = -m0/xintercept
+    b0 = -m0*xintercept
     #window upper bound
     r = int(w/np.cos((180-th)*d2r))
     print('m0: {} b0: {} r:{}'.format(m0,b0,r))
-    xbuf = int(-(b0+r)/m0)
-    if col < xbuf or col > (iw - xbuf) or (iw < (2 * xbuf)):
-        print('ignoring col: {}'.format(col))
-        return
+    print('th: {}, iw {}  ih: {}'.format(th,iw,ih))
+    xbuf = int(-(b0+r)/m0)  # too close to axis 
+
+    #rng = range(xbuf, (iw - xbuf))
+    xmax = int(iw/2)-1 
+    xmin = xmax - iw  # keep size == iw
+    rng = range(xmin,xmax, 1)
+    #print('x range: {} -- {}'.format(xbuf, iw-xbuf)) 
+    #study pixels above and below line
+    vals_abv = []
+    vals_bel = []
+    for x in rng:
+        y = int(m0*x+b0)
+        #print ('X:{} Y{}'.format(x,y),end='')
+        if y > ih/2 or y < -ih/2: # line inside image?
+            #print('')  # no it's not inside
+            continue
+        else:
+            #print('*')
+            # above the line
+            for y1 in range(y,y+r):
+                if  y1 < ih/2:
+                #print('y range: {} -- {}'.format(y,y+r))
+                    vals_abv.append(Get_pix_byXY(img,x,y1))
+            # below the line
+            for y1 in range(y, y-r,-1):
+                #print('y range: {} -- {}'.format(y,y-r))
+                if y1 > -(ih/2):
+                    vals_bel.append(Get_pix_byXY(img,x,y1))
+    print('{} values above'.format(len(vals_abv)))
+    print('{} values below'.format(len(vals_bel)))
+    if len(vals_abv) > 50 and len(vals_bel) > 50:
+        print('shape vals: {}'.format(np.shape(vals_abv)))
+        print('sample: vals: ', vals_abv[0:10])
+        labs_abv, cnts_abv = np.unique(vals_abv, return_counts=True)
+        labs_bel, cnts_bel = np.unique(vals_bel, return_counts=True)
+        print('shape: labels_abv: {}, counts_abv: {}'.format(np.shape(labs_abv),np.shape(cnts_abv)))
+        dom_abv = np.max(cnts_abv)/np.sum(cnts_abv)  # how predominant? (0-1)
+        dom_bel = np.max(cnts_bel)/np.sum(cnts_bel)  # how predominant? (0-1)
+        cl_abv = labs_abv[np.argmax(cnts_abv)] # most common above
+        cl_bel = labs_bel[np.argmax(cnts_bel)] # most common below
+        diff_score = (cl_abv-cl_bel)*dom_abv*dom_bel  # weighted difference
+        diff_score = dom_abv*dom_bel
+        if diff_score < 1.000:
+            print('cl_abv/bel: {}/{} dom_abv/bel: {}/{}, score: {}'.format(cl_abv,cl_bel,dom_abv,dom_bel,diff_score))
+            #x = input('pause ...')
     else:
-        rng = range(xbuf, (iw - xbuf))
-        print('x range: {} -- {}'.format(xbuf, iw-xbuf))
-        labove = []
-        lbelow = []
-        #study pixels above and below line
-        for x in rng:
-            vals_abv = []
-            vals_bel = []
-            y = int(m0*x+b0)
-            if y > ih:
-                continue
-            else:
-                # above the line
-                for y1 in range(y,y+r):
-                    #print('y range: {} -- {}'.format(y,y+r))
-                    if y1 < ih:
-                        vals_abv.append(img[x,y1])
-                for y1 in range(y, y-r):
-                    #print('y range: {} -- {}'.format(y,y-r))
-                    if y1 >=0:
-                        vals_bel.append(img[x,y1])
-        print('{} values above'.format(len(vals_abv)))
-        print('{} values below'.format(len(vals_bel)))
-        x = input('pause ...')
+        return 0.0
+    return diff_score
                     
                 
             
