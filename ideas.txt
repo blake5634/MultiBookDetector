@@ -1,0 +1,6 @@
+1) hough-transform - find lines, esp. vertical ones
+2) color blobs - select book-like shapes ("booktangles") from VQ-labeled centroid color blobs
+3) slants - find lines with big gradients across them (at various angles)
+4) "Educate" a deep NN with progressions of synthetic images of increasing difficulty
+5) drop down contour from background at top of image, also up from bottom of image
+6) develop a "corner-finder" look for quads of 4 similar corners.  Concentrate corner search along top/bottom bg contours.
