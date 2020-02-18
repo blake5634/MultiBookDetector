@@ -74,18 +74,24 @@ for pic_filename in img_paths:
     #
     #  look for lines at a bunch of angles
     #
-    sl_wi = 10  # slice window (dist above/below line)
+    sl_wi = 50  # slice window (dist above/below (90deg to line) line)
     #for th in [95, 120, 150, 180]:
         #for xicpt in range(0, img_width/2, 5):  # should be -iw/2 --- iw/2
             #lscore = nf.Get_line_score(label_img, sl_wi, xicpt, th)
             #print('X: {} th: {} score: {}'.format(xicpt, th, lscore))
-        
-    x1 = 50
-    th = 145
+
+    # XY coordinates relative to (img_width/2, img_height/2) +=up
+    x1 = 32 #  black yellow book bdry
+    x1 = int(65*nf.mm2pix*nf.scale)
+    th = 145   # deg relative to 03:00 (clock)
+    length = 250  #
     print('---Shape label image: {}'.format(np.shape(label_img)))
     print('Image sample: {}'.format(label_img[10,10]))
 
-    lscore = nf.Get_line_score(label_img, sl_wi, x1, th)  # x=0, th=125deg
+    #
+    #     Get the line score
+    #
+    lscore = nf.Get_line_score(label_img, sl_wi, x1, th, length)  # x=0, th=125deg
     print('X: {} th: {} score: {}'.format(x1, th, lscore))        
 
     # Draw the line for debugging
@@ -93,16 +99,40 @@ for pic_filename in img_paths:
     m0 = np.tan(th*d2r)
     b0 = -m0*x1
     x = x1
-    r = 1000
-    xa, ya = nf.XY2iXiY(img_orig, x-r, int(m0*(x-r
-                                               )+b0))
-    xb, yb = nf.XY2iXiY(img_orig, x+r, int(m0*(x+r)+b0))
+    dx = abs(int((length/2)*np.cos(th*d2r)))
+    xa, ya = nf.XY2iXiY(img_orig, x-dx, int(m0*(x-dx)+b0))
+    xb, yb = nf.XY2iXiY(img_orig, x+dx, int(m0*(x+dx)+b0))
     print('Image shape: {}'.format(np.shape(img_orig)))
     print('pt a: {},{},  pt b: {},{}'.format(xa,ya,xb,yb))
-    ir = np.shape(img_orig)[0]
-    ic = np.shape(img_orig)[1]
-    cv2.line(img_orig, (xa,ya), (xb,yb), (255,255,255), 3)    
-    cv2.line(img_orig, (0,int(ir/2)), (ic,int(ir/2)), (255,255,255), 3)    
+    ir = np.shape(img_orig)[0]  # image rows
+    ic = np.shape(img_orig)[1]  # image cols
+    cv2.line(img_orig, (xa,ya), (xb,yb), (255,255,255), 3)
+
+    # line window border lines
+    r = int(sl_wi/np.cos((180-th)*d2r))
+    ya += r
+    yb += r
+    cv2.line(img_orig, (xa,ya), (xb,yb), (0,0,255), 2)
+    ya -= 2*r
+    yb -= 2*r
+    cv2.line(img_orig, (xa,ya), (xb,yb), (0,0,255), 2)
+
+    # horizontal axis
+    cv2.line(img_orig, (0,int(ir/2)), (ic,int(ir/2)), (255,255,255), 2)
+    # vertical axis
+    cv2.line(img_orig, (int(ic/2),0), (int(ic/2),ir), (255,255,255), 2)
+    
+    # 1 cm tick marks
+    row = int(ir/2)
+    col = int(6*nf.mm2pix*nf.scale)  # line up with x=0
+    ya = int(ir/2)
+    tick = int(5*nf.mm2pix*nf.scale)
+    yb = int(ir/2 + tick)
+    while col < ic:
+        xa = col
+        cv2.line(img_orig, (xa,ya), (xa,yb), (255,255,255), 2)
+        col += int(10*nf.mm2pix*nf.scale)
+    
     
     print('{}, {} booktangles detected'.format(pic_filename, nfound) )
 

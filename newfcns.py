@@ -4,14 +4,19 @@ import glob as gb
 import matplotlib.pyplot as plt
 
 scale = 3
+mm2pix = float(4.6)/float(scale)   # convert pix * pix2mm = xx mm
+                                   # measure off unscaled target image
+pix2mm = float(1.0)/mm2pix   
+
 #  following smoothing windows are scaled from here by /scale
 #     values below reflect a nominal image width of 1670
 
-deriv_win_size = 12      # 20 = 1.2% of image width
+deriv_win_size = int(1.0*mm2pix)      # 1mm width
 smooth_size= -10     # <0:   do not smooth
-blur_rad = 9
+blur_rad = int(1.0*mm2pix)    
 if blur_rad%2 == 0:
     blur_rad += 1
+
 KM_Clusters = 10
 
 font = cv2.FONT_HERSHEY_SIMPLEX
@@ -41,7 +46,7 @@ font = cv2.FONT_HERSHEY_SIMPLEX
 #                       |
 #                       |
 #
-#    to classic image proc coordiates:
+#    to classic image proc coordinates:
 #      0/0------- col ----->
 ##      |
 #       row
@@ -51,19 +56,15 @@ font = cv2.FONT_HERSHEY_SIMPLEX
 ##
 def Get_pix_byXY(img,X,Y):
     #print('Get: {} {}'.format(X,Y))
-    #return (1,1,1)   ######################  TEST
-    irows = img.shape[0]
-    row = int(irows/2)-Y 
-    col = X+int(img.shape[1]/2)
-    #print ('GXY: returning {}'.format(img[row,col]))
+    row,col = XY2RC(img,X,Y)
     return(img[row,col])
 
 #
-# convert image ctr XY to X,Y (open CV)
+# convert image ctr XY to X,Y (open CV point)
 #
 def XY2iXiY(img,X,Y):
-    row = int(img.shape[0]/2)-Y 
-    col = X+int(img.shape[1]/2)
+    row = -Y + int(img.shape[0]/2)
+    col =  X + int(img.shape[1]/2)
     iX = col 
     iY = row
     return iX, iY
@@ -71,9 +72,8 @@ def XY2iXiY(img,X,Y):
 # convert image ctr XY to Row, Col 
 #
 def XY2RC(img,X,Y):
-    irows = img.shape[0]
-    row = int(irows/2)-Y 
-    col = X+int(img.shape[1]/2)
+    row = -Y + int(img.shape[0]/2)
+    col =  X + int(img.shape[1]/2)
     return row,col
 
 #
@@ -87,13 +87,20 @@ def XY2RC(img,X,Y):
 #   angle th (deg)  w.r.t. row
 #
 #
-def Get_line_score(img, w, xintercept, th):
+def Get_line_score(img, w, xintercept, th, llen):
+    '''
+    img = image (already scaled)
+    w   = width of line analysis window (90deg from line)
+    xintercept = where line crosses vertical centerline of image (X=0)
+    th  = angle in deg relative to 03:00 on clock
+    llen = length of line segment
+    '''
     print('\n\n w: {} xint: {}, th: {}'.format( w,xintercept, th))
     print(' ---   image shape: {}'.format(np.shape(img)))
     print('Image sample: {}'.format(img[10,10]))
     ih = img.shape[0]
     iw = img.shape[1]
-    assert (xintercept > -iw/2 and xintercept <= iw/2), 'bad xvalue: '+str(xintercept)
+    assert (xintercept > -iw/2 and xintercept <= iw/2), 'bad x-value: '+str(xintercept)
     d2r = 2*np.pi/360.0  #deg to rad
     m0 = np.tan(th*d2r)
     b0 = -m0*xintercept
@@ -104,8 +111,15 @@ def Get_line_score(img, w, xintercept, th):
     xbuf = int(-(b0+r)/m0)  # too close to axis 
 
     #rng = range(xbuf, (iw - xbuf))
+    # xrange: full
     xmax = int(iw/2)-1 
     xmin = xmax - iw  # keep size == iw
+    # xrange: based on line length, llen
+    dx = abs(int((llen/2)*np.cos(th*d2r)))
+    xmin = xintercept - dx
+    xmax = xintercept + dx
+    
+    
     rng = range(xmin,xmax, 1)
     #print('x range: {} -- {}'.format(xbuf, iw-xbuf)) 
     #study pixels above and below line
