@@ -3,29 +3,28 @@ import numpy as np
 import glob as gb
 import matplotlib.pyplot as plt
 
-scale = 3
-mm2pix = float(4.6)/float(scale)   # convert pix * pix2mm = xx mm
+scale = 1   # downsample image by this much
+
+#   ~5.0 pix / mm  (measured from original target img)
+
+pix2mm = float(.2) * float(scale)   # convert pix * pix2mm = xx mm
                                    # measure off unscaled target image
-pix2mm = float(1.0)/mm2pix   
+mm2pix = float(1.0)/pix2mm 
 
 #  following smoothing windows are scaled from here by /scale
 #     values below reflect a nominal image width of 1670
 
-deriv_win_size = int(1.0*mm2pix)      # 1mm width
-smooth_size= -10     # <0:   do not smooth
-blur_rad = int(1.0*mm2pix)    
-if blur_rad%2 == 0:
-    blur_rad += 1
+deriv_win_size =     int(1.0*mm2pix)      # 1mm width
+smooth_size    = -1* int(10*mm2pix)    # <0:   do not smooth
+blur_rad       =     int(1.0*mm2pix)    # to scaled pixels
+if blur_rad%2 == 0:   # make it odd # of pixels
+    blur_rad += 1   
 
 KM_Clusters = 10
 
 font = cv2.FONT_HERSHEY_SIMPLEX
-
-#img_width = int(3000/scale)
-#img_height =  int(4000/scale)
-#img_width = int(1671)
-#img_height =  int(1206)
-
+colors = {'white':(255,255,255), 'blue':(255,0,0), 'green':(0,255,0), 'red':(0,0,255)}
+ 
 #
 #  new functions by BH
 #
@@ -57,109 +56,164 @@ font = cv2.FONT_HERSHEY_SIMPLEX
 def Get_pix_byXY(img,X,Y):
     #print('Get: {} {}'.format(X,Y))
     row,col = XY2RC(img,X,Y)
+    if col > 500:
+        print('  Get_pix_byXY() X:{} Y:{} r:{} c:{}'.format(X,Y,row,col))
+    return(img[row,col])
+
+def Get_pix_byRC(img,row,col): 
     return(img[row,col])
 
 #
-# convert image ctr XY to X,Y (open CV point)
+# convert image ctr XY(mm) to X,Y (open CV point)
 #
 def XY2iXiY(img,X,Y):
-    row = -Y + int(img.shape[0]/2)
-    col =  X + int(img.shape[1]/2)
-    iX = col 
+    row = int( -Y*mm2pix + int(img.shape[0]/2) )
+    col = int(  X*mm2pix + int(img.shape[1]/2) )
+    iX = col
     iY = row
     return iX, iY
 #
-# convert image ctr XY to Row, Col 
+# convert image ctr XY(mm) to Row, Col 
 #
 def XY2RC(img,X,Y):
-    row = -Y + int(img.shape[0]/2)
-    col =  X + int(img.shape[1]/2)
+    row = int( -Y*mm2pix + int(img.shape[0]/2) )
+    col = int(  X*mm2pix + int(img.shape[1]/2) )
     return row,col
 
+#
+#  Get image bounds in mm  
+#
+def Get_mmBounds(img):
+    sh = np.shape(img)  # get rows & cols
+    xmin = -1* (sh[1]*pix2mm/2)
+    xmax = -1*xmin
+    ymin = -1* (sh[0]*pix2mm/2)
+    ymax = -1*ymin
+    return (xmin, xmax, ymin, ymax)
+#
+#  Draw a line/rect in mm coordinates
+#
+#  if image scale is different from "scale" then use param
+#
+def DLine_mm(img, p1, p2, st_color, width=3,iscale=scale):
+    p1_pix = XY2iXiY(img, p1[0],p1[1])
+    p2_pix = XY2iXiY(img, p2[0],p2[1])    # assumes a scaled image
+    #if iscale != scale:
+        #p1_pix = ( int(p1_pix[0]*scale/iscale), int(p1_pix[1]*scale/iscale)  )
+        #p2_pix = ( int(p2_pix[0]*scale/iscale), int(p2_pix[1]*scale/iscale)  )
+    cv2.line(img, p1_pix, p2_pix, colors[st_color], width)
+    
+def DRect_mm(img,  p1, p2, st_color, width=3,iscale=scale):
+    p1_pix = XY2iXiY(img, p1[0],p1[1])
+    p2_pix = XY2iXiY(img, p2[0],p2[1])
+    if iscale != scale:
+        p1_pix = ( int(p1_pix[0]*scale/iscale), int(p1_pix[1]*scale/iscale)  )
+        p2_pix = ( int(p2_pix[0]*scale/iscale), int(p2_pix[1]*scale/iscale)  )
+    cv2.rectangle(img, p1_pix, p2_pix, colors[st_color], width)
+ 
+#
+#  Return standard image size references
+#    img = unscaled image
+#    scale = int scale factor to be used
+def Get_sizes(img, scale):
+    ish = np.shape(img)
+    siw = int(ish[1]/scale)
+    sih =  int(ish[0]/scale)
+    return ish, (sih, siw)
+
+
+#
 #
 #  Get edge score of a line through image
 #
 #   y = mx+b  (y=row, x=col)
 #
-#   img = label_image from KM()
-#   col = col where line interects row 0
-#   w   = window thickness (pixels)
-#   angle th (deg)  w.r.t. row
-#
-#
-def Get_line_score(img, w, xintercept, th, llen):
+#   NEW:   All coordinates and radii etc are in mm 
+def Get_line_score(img, w, xintercept, th, llen, cdist):
     '''
     img = image (already scaled)
-    w   = width of line analysis window (90deg from line)
-    xintercept = where line crosses vertical centerline of image (X=0)
+    w   = width of line analysis window (90deg from line) (mm)
+    xintercept = where line crosses vertical centerline of image (X=0) (mm)
     th  = angle in deg relative to 03:00 on clock
-    llen = length of line segment
+    llen = length of line segment (mm)
+    cdist = matrix of color distances (Euclid) btwn VQ centers
     '''
     print('\n\n w: {} xint: {}, th: {}'.format( w,xintercept, th))
     print(' ---   image shape: {}'.format(np.shape(img)))
     print('Image sample: {}'.format(img[10,10]))
     ih = img.shape[0]
-    iw = img.shape[1]
-    assert (xintercept > -iw/2 and xintercept <= iw/2), 'bad x-value: '+str(xintercept)
+    iw = img.shape[1] 
+    xmin, xmax, ymin, ymax = Get_mmBounds(img)  # in mm
+    assert (xintercept > xmin and xintercept <= xmax), 'bad x-value: '+str(xintercept)
     d2r = 2*np.pi/360.0  #deg to rad
-    m0 = np.tan(th*d2r)
-    b0 = -m0*xintercept
+    m0 = np.tan(th*d2r) # slope (mm/mm)
+    b0 = -m0*xintercept  # mm
+    #bp, dummy = XY2iXiY(img,b0,0)  # pixels (cols)
     #window upper bound
-    r = int(w/np.cos((180-th)*d2r))
-    print('m0: {} b0: {} r:{}'.format(m0,b0,r))
-    print('th: {}, iw {}  ih: {}'.format(th,iw,ih))
-    xbuf = int(-(b0+r)/m0)  # too close to axis 
-
-    #rng = range(xbuf, (iw - xbuf))
-    # xrange: full
-    xmax = int(iw/2)-1 
-    xmin = xmax - iw  # keep size == iw
-    # xrange: based on line length, llen
-    dx = abs(int((llen/2)*np.cos(th*d2r)))
-    xmin = xintercept - dx
-    xmax = xintercept + dx
+    #  rV = distance to upper bound (vertical) mm
     
+    rV  = abs( w/np.cos((180-th)*d2r)) # mm  (a delta / no origin offset)
+    rVp = int(rV * mm2pix)     # pixels
+    print('m0: {} b0: {}mm rVp:{}(pix)'.format(m0,b0,rVp))
+    print('rV(mm): {:5.2f}'.format(rV))
+    print('th: {} deg, iw {}  ih: {}'.format(th,iw,ih))
+    dx = abs((llen/2)*np.cos(th*d2r)) # mm
     
-    rng = range(xmin,xmax, 1)
-    #print('x range: {} -- {}'.format(xbuf, iw-xbuf)) 
-    #study pixels above and below line
+    xmin2 = xintercept - dx #mm    X range for test line
+    xmax2 = xintercept + dx #mm
+    print('xmin/max2: {:4.2f}mm {:4.2f}mm'.format(xmin2,xmax2))
+    # cols,  rows = XY2iXiY()
+    xmi2p, dummy =XY2iXiY(img, xmin2,0)  # pix  X range for test line
+    xmx2p, dummy =XY2iXiY(img, xmax2,0)
+    
+    rng = range(xmi2p, xmx2p-1, 1)  # pix cols
+    print('x range: {} -- {}'.format(xmi2p, xmx2p)) 
+    #study pixels above and below line at all columns
     vals_abv = []
     vals_bel = []
-    for x in rng:
-        y = int(m0*x+b0)
+    ymaxp = ih    # pix, same as image rows
+    yminp = 0     # pix
+    for col in rng:
+        x = pix2mm*(col - iw/2) # convert back to mm(!)
+        ymm = m0*x+b0     # line eqn in mm
+        row, dummy = XY2RC(img,0,ymm)    # pix
         #print ('X:{} Y{}'.format(x,y),end='')
-        if y > ih/2 or y < -ih/2: # line inside image?
+        if (row > ih-1 or row < 0) or (col > iw-1 or col < 0): # line inside image?
             #print('')  # no it's not inside
             continue
         else:
             #print('*')
             # above the line
-            for y1 in range(y,y+r):
-                if  y1 < ih/2:
-                #print('y range: {} -- {}'.format(y,y+r))
-                    vals_abv.append(Get_pix_byXY(img,x,y1))
+            for row1 in range(row,row-rVp,-1): # higher rows "lower"
+                if  row1 < ymaxp:
+                    #print('             row range1: {} -- {}'.format(row,row+r))
+                    vals_abv.append(Get_pix_byRC(img,row1,col)) # accum. labels in zone above
             # below the line
-            for y1 in range(y, y-r,-1):
-                #print('y range: {} -- {}'.format(y,y-r))
-                if y1 > -(ih/2):
-                    vals_bel.append(Get_pix_byXY(img,x,y1))
-    print('{} values above'.format(len(vals_abv)))
+            for row1 in range(row, row+rVp,1):
+                if row1 > yminp:
+                    #print('             row range2: {} -- {}'.format(row,row-r))
+                    vals_bel.append(Get_pix_byRC(img,row1,col))
+    print('\n\n{} values above'.format(len(vals_abv)))
     print('{} values below'.format(len(vals_bel)))
     if len(vals_abv) > 50 and len(vals_bel) > 50:
-        print('shape vals: {}'.format(np.shape(vals_abv)))
-        print('sample: vals: ', vals_abv[0:10])
+        #print('shape vals: {}'.format(np.shape(vals_abv)))
+        #print('sample: vals: ', vals_abv[0:10])
         labs_abv, cnts_abv = np.unique(vals_abv, return_counts=True)
         labs_bel, cnts_bel = np.unique(vals_bel, return_counts=True)
-        print('shape: labels_abv: {}, counts_abv: {}'.format(np.shape(labs_abv),np.shape(cnts_abv)))
+        print('shape: labels_abv: {}, counts_abv: {}   Data: '.format(np.shape(labs_abv),np.shape(cnts_abv)))
+        print(labs_abv, cnts_abv)
+        print('labels: (100 samples)')
+        print(vals_abv[0:100])
         dom_abv = np.max(cnts_abv)/np.sum(cnts_abv)  # how predominant? (0-1)
         dom_bel = np.max(cnts_bel)/np.sum(cnts_bel)  # how predominant? (0-1)
+        color_distance = cdist[np.argmax(cnts_abv),np.argmax(cnts_bel)]
         cl_abv = labs_abv[np.argmax(cnts_abv)] # most common above
         cl_bel = labs_bel[np.argmax(cnts_bel)] # most common below
-        diff_score = (cl_abv-cl_bel)*dom_abv*dom_bel  # weighted difference
-        diff_score = dom_abv*dom_bel
-        if diff_score < 1.000:
-            print('cl_abv/bel: {}/{} dom_abv/bel: {}/{}, score: {}'.format(cl_abv,cl_bel,dom_abv,dom_bel,diff_score))
-            #x = input('pause ...')
+        diff_score = (color_distance)*dom_abv*dom_bel  # weighted difference
+        #diff_score = dom_abv*dom_bel
+        print('color cluster diff: {:8.3f}'.format(color_distance))
+        print('cl_abv/bel: {}/{} dom_abv/bel: {:5.3f}/{:5.3f}, score:  {}'.format(cl_abv,cl_bel,dom_abv,dom_bel,diff_score))
+        #x = input('pause ...')
     else:
         return 0.0
     return diff_score
@@ -357,7 +411,7 @@ def Gen_cluster_colors(centers):
     x=0
     for i in range(len(centers)):
         col = tuple([int(x) for x in centers[i]])
-        print('Color label: ',col)
+        print('Color label {}: '.format(i),col)
         if i >= 10:
             break
         cv2.rectangle(img, (x,y), (iw,y+h), col, FILLED)
@@ -385,6 +439,12 @@ def KM(img,N):
     #for i in range(len(labels)):
         #print('{}   {} ({}) '.format(i,labels[i],counts[i]), palette[i])
      
+    # compute a distance matrix between the cluster centers (color similarity)
+    dist = np.zeros((N,N))
+    for i in range(N):
+        for j in range(N):
+            dist[i,j] = cv2.norm(centers[i]-centers[j])
+            
     # from float back to 8bit
     centers = np.uint8(centers)
     labels = labels.flatten()
@@ -394,7 +454,7 @@ def KM(img,N):
     #reshape
     newimg = newimg.reshape(img.shape)
     
-    return [newimg, labeled_image, centers]
+    return [newimg, labeled_image, centers, dist]
 
 
 def smooth(x,window_len=11,window='hanning'):
