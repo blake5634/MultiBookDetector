@@ -3,7 +3,7 @@ import numpy as np
 import glob as gb
 import matplotlib.pyplot as plt
 
-scale = 1   # downsample image by this much
+scale = 3   # downsample image by this much
 
 #   ~5.0 pix / mm  (measured from original target img)
 
@@ -66,7 +66,11 @@ def Get_pix_byRC(img,row,col):
 #
 # convert image ctr XY(mm) to X,Y (open CV point)
 #
-def XY2iXiY(img,X,Y):
+def XY2iXiY(img,X,Y,iscale=scale):
+    if iscale != scale:   # mm2pix has scale in it so..
+        f = float(scale)/float(iscale)
+        X *= f
+        Y *= f
     row = int( -Y*mm2pix + int(img.shape[0]/2) )
     col = int(  X*mm2pix + int(img.shape[1]/2) )
     iX = col
@@ -75,7 +79,11 @@ def XY2iXiY(img,X,Y):
 #
 # convert image ctr XY(mm) to Row, Col 
 #
-def XY2RC(img,X,Y):
+def XY2RC(img,X,Y,iscale=scale):
+    if iscale != scale:
+        f = float(scale)/float(iscale)
+        X *= f
+        Y *= f
     row = int( -Y*mm2pix + int(img.shape[0]/2) )
     col = int(  X*mm2pix + int(img.shape[1]/2) )
     return row,col
@@ -83,12 +91,18 @@ def XY2RC(img,X,Y):
 #
 #  Get image bounds in mm  
 #
-def Get_mmBounds(img):
+def Get_mmBounds(img,iscale=scale):
     sh = np.shape(img)  # get rows & cols
-    xmin = -1* (sh[1]*pix2mm/2)
+    xmin = -1* (sh[1]*pix2mm/2)  # pix2mm factor includes scale
     xmax = -1*xmin
     ymin = -1* (sh[0]*pix2mm/2)
     ymax = -1*ymin
+    if iscale != scale:
+        f = float(iscale)/float(scale)
+        xmin *= f
+        xmax *= f
+        ymin *= f
+        ymax *= f
     return (xmin, xmax, ymin, ymax)
 #
 #  Draw a line/rect in mm coordinates
@@ -96,19 +110,13 @@ def Get_mmBounds(img):
 #  if image scale is different from "scale" then use param
 #
 def DLine_mm(img, p1, p2, st_color, width=3,iscale=scale):
-    p1_pix = XY2iXiY(img, p1[0],p1[1])
-    p2_pix = XY2iXiY(img, p2[0],p2[1])    # assumes a scaled image
-    #if iscale != scale:
-        #p1_pix = ( int(p1_pix[0]*scale/iscale), int(p1_pix[1]*scale/iscale)  )
-        #p2_pix = ( int(p2_pix[0]*scale/iscale), int(p2_pix[1]*scale/iscale)  )
+    p1_pix = XY2iXiY(img, p1[0],p1[1],iscale=iscale)
+    p2_pix = XY2iXiY(img, p2[0],p2[1],iscale=iscale)    # allows for change of scale 
     cv2.line(img, p1_pix, p2_pix, colors[st_color], width)
     
 def DRect_mm(img,  p1, p2, st_color, width=3,iscale=scale):
-    p1_pix = XY2iXiY(img, p1[0],p1[1])
-    p2_pix = XY2iXiY(img, p2[0],p2[1])
-    if iscale != scale:
-        p1_pix = ( int(p1_pix[0]*scale/iscale), int(p1_pix[1]*scale/iscale)  )
-        p2_pix = ( int(p2_pix[0]*scale/iscale), int(p2_pix[1]*scale/iscale)  )
+    p1_pix = XY2iXiY(img, p1[0],p1[1],iscale=iscale)
+    p2_pix = XY2iXiY(img, p2[0],p2[1],iscale=iscale)
     cv2.rectangle(img, p1_pix, p2_pix, colors[st_color], width)
  
 #
@@ -129,7 +137,7 @@ def Get_sizes(img, scale):
 #   y = mx+b  (y=row, x=col)
 #
 #   NEW:   All coordinates and radii etc are in mm 
-def Get_line_score(img, w, xintercept, th, llen, cdist):
+def Get_line_score(img, w, xintercept, th, llen,bias, cdist):
     '''
     img = image (already scaled)
     w   = width of line analysis window (90deg from line) (mm)

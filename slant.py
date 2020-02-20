@@ -97,6 +97,8 @@ for pic_filename in img_paths:
     x1 = 60.0 #mm   btwn blue and black book
     th = 145   # deg relative to 03:00 (clock)
     th = 142  # deg relative to 03:00 (clock)
+    d2r = 2*np.pi/360.0  #deg to rad
+    m0 = np.tan(th*d2r) # slope (mm/mm)
     length = 200  # mm
     print('---Shape label image: {}'.format(np.shape(label_img)))
     print('Image sample: {}'.format(label_img[10,10]))
@@ -105,7 +107,8 @@ for pic_filename in img_paths:
     #     Get the line score
     #
     #lscore = 0.99999999
-    lscore = nf.Get_line_score(label_img, sl_wi, x1, th, length, color_dist)  # x=0, th=125deg
+    bias = -20 / m0  # mm   (shift line down from Y=0 line)         
+    lscore = nf.Get_line_score(label_img, sl_wi, x1, th, length, bias, color_dist)  # x=0, th=125deg
     print('X: {} th: {} score: {}'.format(x1, th, lscore))
 
     
@@ -116,15 +119,21 @@ for pic_filename in img_paths:
     #
     #  Draw some debugging graphics
     #
-    tsti = img_orig  # original 
-    tsti = img0      # scaled and VQ'd by KM()
-    (xmin, xmax, ymin, ymax) = nf.Get_mmBounds(tsti)
+    tsti = img_orig.copy()  # original 
+    tstscale = 1
+    #tstscale = 3  #????
+    #tsti = img0      # scaled and VQ'd by KM()
+    #tstscale = 3
     
-    # Draw H and V axes (X,Y axes in mm)
-    nf.DLine_mm(tsti, (xmin,0), (xmax,0),'white')
-    nf.DLine_mm(tsti, (0, ymin), (0, ymax), 'white')
+    (xmin, xmax, ymin, ymax) = nf.Get_mmBounds(tsti,iscale=tstscale)
 
-    # Draw some tick marks
+
+    print('xmin,xmax,ymin,ymax:  {} {} {} {}'.format(xmin,xmax,ymin,ymax))
+    # Draw H and V axes (X,Y axes in mm)
+    nf.DLine_mm(tsti, (xmin,0), (xmax,0),'white',iscale=tstscale)
+    nf.DLine_mm(tsti, (0, ymin), (0, ymax), 'white',iscale=tstscale)
+
+    ## Draw some tick marks
     tick_locs_mm = [] # pix
     tickwidth = 20 # mm
     for xt in range(15): # unitless
@@ -134,7 +143,7 @@ for pic_filename in img_paths:
     ya = 0.0 #mm
     yb = -5.0 #mm
     for x in tick_locs_mm:
-        nf.DLine_mm(tsti, (x, ya), (x,yb), 'green',iscale=1)
+        nf.DLine_mm(tsti, (x, ya), (x,yb), 'green',iscale=tstscale)
 
     #
     #   Draw the testing line and bounds 
@@ -150,18 +159,18 @@ for pic_filename in img_paths:
         #print('m0: {} b0: {}mm rp:{}(pix)'.format(m0,b0,rp))
         #print('th: {} deg, iw {}  ih: {}'.format(th,iw,ih))
         dx = abs((length/2)*np.cos(th*d2r)) # mm
-        
-        xmin2 = x1 - dx #mm    X range for test line
-        xmax2 = x1 + dx #mm
+        bias = -20 / m0  # mm   (shift line down from Y=0 line)
+        xmin2 = x1 - dx + bias #mm    X range for test line
+        xmax2 = x1 + dx + bias  #mm
         # cols,  rows = XY2iXiY()
         xmi2p, dummy = nf.XY2iXiY(tsti, xmin2,0)  # pix  X range for test line
         xmx2p, dummy = nf.XY2iXiY(tsti, xmax2,0)
         rng = range(xmi2p, xmx2p-1, 1)  # pix cols
         # the line
-        nf.DLine_mm(tsti, (xmin2, m0*xmin2+b0), (xmax2, m0*xmax2+b0), 'white')
+        nf.DLine_mm(tsti, (xmin2, m0*xmin2+b0), (xmax2, m0*xmax2+b0), 'white',iscale=tstscale)
         # above window line
-        nf.DLine_mm(tsti, (xmin2,  rV + m0*xmin2+b0), (xmax2,  rV + m0*xmax2+b0), 'blue')
-        nf.DLine_mm(tsti, (xmin2, -rV + m0*xmin2+b0), (xmax2, -rV + m0*xmax2+b0), 'green')
+        nf.DLine_mm(tsti, (xmin2,  rV + m0*xmin2+b0), (xmax2,  rV + m0*xmax2+b0), 'blue',iscale=tstscale)
+        nf.DLine_mm(tsti, (xmin2, -rV + m0*xmin2+b0), (xmax2, -rV + m0*xmax2+b0), 'green',iscale=tstscale)
         
 
 
