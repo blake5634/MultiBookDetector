@@ -17,6 +17,8 @@ Find books in a bookshelf image
  
 
 img_paths = gb.glob('tiny/target.jpg')
+d2r = 2*np.pi/360.0  #deg to rad
+
 if (len(img_paths) < 1):
     print('No files found')
     quit()
@@ -79,46 +81,58 @@ for pic_filename in img_paths:
     #
     #   Find background label
     #
-    backgnd = nf.Check_background(label_img)
+    backgnd = nf.Check_background(label_img)    
     
     #
-    #  look for lines at a bunch of angles
+    #  look for lines at a bunch of x-values
     #
-    sl_wi = 4 #mm # slice window (dist above/below (90deg to line) line)
-    #for th in [95, 120, 150, 180]:
-        #for xicpt in range(0, img_width/2, 5):  # should be -iw/2 --- iw/2
-            #lscore = nf.Get_line_score(label_img, sl_wi, xicpt, th)
-            #print('X: {} th: {} score: {}'.format(xicpt, th, lscore))
 
-    # XY coordinates relative to (img_width/2, img_height/2) +=up
-    x1 = 88.0 #mm  black yellow book bdry
-    x1 = 102.0 #mm  middle of tan book(!)
-    x1 = 65.0 #mm  middle of blue book(!)
-    x1 = 60.0 #mm   btwn blue and black book
-    th = 145   # deg relative to 03:00 (clock)
-    th = 142  # deg relative to 03:00 (clock)
-    d2r = 2*np.pi/360.0  #deg to rad
-    m0 = np.tan(th*d2r) # slope (mm/mm)
-    length = 200  # mm
-    print('---Shape label image: {}'.format(np.shape(label_img)))
-    print('Image sample: {}'.format(label_img[10,10]))
+    # book shape parameters target
+    sl_wi = 4 #mm # slice window (dist above/below (90deg to line) line) 
+    length = 50  # mm
 
-    #
-    #     Get the line score
-    #
-    #lscore = 0.99999999
-    bias = -20 / m0  # mm   (shift line down from Y=0 line)         
-    lscore = nf.Get_line_score(label_img, sl_wi, x1, th, length, bias, color_dist)  # x=0, th=125deg
-    print('X: {} th: {} score: {}'.format(x1, th, lscore))
+    linescanx_mm = range(160, -160, -2) #mm
+    ang_scan_deg = range(110,170,2)  # deg 
+    
+    lines_found = []
+    
+    Line_Score_Thresh = 100
+    
+    
+    for th in ang_scan_deg:
+        for xmm in linescanx_mm:
+    #if True:
+            #(th, xmm) = (140, -40)
+            # XY coordinates relative to (img_width/2, img_height/2) +=up
+            
+            # some test values 
+            #x1 = 88.0 #mm  black yellow book bdry
+            #x1 = 102.0 #mm  middle of tan book(!)
+            #x1 = 65.0 #mm  middle of blue book(!)
+            #x1 = 60.0 #mm   btwn blue and black book
+            
+            x1 = xmm
+            
+            #th = 145   # deg relative to 03:00 (clock)
+            #th = 142  # deg relative to 03:00 (clock)
+            m0 = np.tan(th*d2r) # slope (mm/mm)
+            #print('---Shape label image: {}'.format(np.shape(label_img)))
+            #print('Image sample: {}'.format(label_img[10,10]))
 
-    
-    
-    
-    
-    ###################################################################3
-    #
-    #  Draw some debugging graphics
-    #
+            #
+            #     Get the line score
+            #
+            #lscore = 0.99999999
+            line_bias = -20  # mm   (shift line down from Y=0 line)         
+            lscore = nf.Get_line_score(label_img, sl_wi, x1, th, length, line_bias, color_dist)  # x=0, th=125deg
+            print('X: {} th: {} score: {}'.format(x1, th, lscore))
+
+            if lscore > Line_Score_Thresh:
+                print('line at {:4.2f} is important, score ({})'.format(xmm,lscore))
+                lines_found.append((xmm,th,lscore))
+        
+    # 
+    # tsti will be the desired display image (tstscale is IT's scale) 
     tsti = img_orig.copy()  # original 
     tstscale = 1
     #tstscale = 3  #????
@@ -129,6 +143,78 @@ for pic_filename in img_paths:
 
 
     print('xmin,xmax,ymin,ymax:  {} {} {} {}'.format(xmin,xmax,ymin,ymax))
+    
+    print('found {} lines initially'.format(len(lines_found)))
+    if True:
+        #
+        # cluster the lines found.   Get strongest line in each bunch
+        #
+        maxgap = 4 #mm   biggest gap inside a bunch
+        strong_lines = []
+        xp = -500 #mm
+        lsmax = -99  # max score in a bunch
+        xsmax = -200
+        thmax = -200
+        first = True
+        for x,th,score in lines_found:
+            if abs(x-xp) > maxgap and not first: # mm
+                strong_lines.append((xsmax,thmax, lsmax))
+                lsmax = -99
+                continue
+            if score > lsmax:
+                lsmax = score
+                xsmax = x
+                thmax = th
+            first = False
+            xp = x
+        print('found {} strong lines'.format(len(strong_lines)))
+        #print ('strongest lines:')
+        #print (strong_lines)
+    else:
+        strong_lines = lines_found
+        
+    for x1,th,score in strong_lines:
+    #
+    #   Draw the testing line and bounds 
+    #
+        d2r = 2*np.pi/360.0  #deg to rad
+        m0 = np.tan(th*d2r) # slope (mm/mm)
+        b0 = -m0*x1  # mm 
+        rV = sl_wi/np.cos((180-th)*d2r)  # mm
+        #rVp, dummy  = nf.XY2RC(tsti,rV,0)  # pixels
+        rVp = int(rV * nf.mm2pix)     # pixels
+
+        #print('m0: {} b0: {}mm rp:{}(pix)'.format(m0,b0,rp))
+        #print('th: {} deg, iw {}  ih: {}'.format(th,iw,ih))
+        dx = abs((length/2)*np.cos(th*d2r)) # mm
+        xmin2 = x1 - dx  #mm    X range for test line
+        xmax2 = x1 + dx  #mm
+        # cols,  rows = XY2iXiY()
+        xmi2p, dummy = nf.XY2iXiY(tsti, xmin2,0)  # pix  X range for test line
+        xmx2p, dummy = nf.XY2iXiY(tsti, xmax2,0)
+        rng = range(xmi2p, xmx2p-1, 1)  # pix cols
+        # the line
+        colcode='yellow'
+        if score > 1.1*Line_Score_Thresh:
+            colcode = 'green'
+        if score > 1.2*Line_Score_Thresh:
+            colcode = 'blue'
+        if score > 1.6*Line_Score_Thresh:
+            colcode = 'red'
+        if score > 2.0*Line_Score_Thresh:
+            colcode = 'white'
+        nf.DLine_mm(tsti, (xmin2, line_bias + m0*xmin2+b0), (xmax2, line_bias + m0*xmax2+b0), colcode,iscale=tstscale)
+        # above window line
+        #nf.DLine_mm(tsti, (xmin2,  rV + m0*xmin2+b0), (xmax2,  rV + m0*xmax2+b0), 'blue',iscale=tstscale)
+        #nf.DLine_mm(tsti, (xmin2, -rV + m0*xmin2+b0), (xmax2, -rV + m0*xmax2+b0), 'green',iscale=tstscale)
+        
+  
+  
+  
+    ###################################################################3
+    #
+    #  Draw some debugging graphics
+    #
     # Draw H and V axes (X,Y axes in mm)
     nf.DLine_mm(tsti, (xmin,0), (xmax,0),'white',iscale=tstscale)
     nf.DLine_mm(tsti, (0, ymin), (0, ymax), 'white',iscale=tstscale)
@@ -145,33 +231,6 @@ for pic_filename in img_paths:
     for x in tick_locs_mm:
         nf.DLine_mm(tsti, (x, ya), (x,yb), 'green',iscale=tstscale)
 
-    #
-    #   Draw the testing line and bounds 
-    #
-    if True:
-        d2r = 2*np.pi/360.0  #deg to rad
-        m0 = np.tan(th*d2r) # slope (mm/mm)
-        b0 = -m0*x1  # mm 
-        rV = sl_wi/np.cos((180-th)*d2r)  # mm
-        #rVp, dummy  = nf.XY2RC(tsti,rV,0)  # pixels
-        rVp = int(rV * nf.mm2pix)     # pixels
-
-        #print('m0: {} b0: {}mm rp:{}(pix)'.format(m0,b0,rp))
-        #print('th: {} deg, iw {}  ih: {}'.format(th,iw,ih))
-        dx = abs((length/2)*np.cos(th*d2r)) # mm
-        bias = -20 / m0  # mm   (shift line down from Y=0 line)
-        xmin2 = x1 - dx + bias #mm    X range for test line
-        xmax2 = x1 + dx + bias  #mm
-        # cols,  rows = XY2iXiY()
-        xmi2p, dummy = nf.XY2iXiY(tsti, xmin2,0)  # pix  X range for test line
-        xmx2p, dummy = nf.XY2iXiY(tsti, xmax2,0)
-        rng = range(xmi2p, xmx2p-1, 1)  # pix cols
-        # the line
-        nf.DLine_mm(tsti, (xmin2, m0*xmin2+b0), (xmax2, m0*xmax2+b0), 'white',iscale=tstscale)
-        # above window line
-        nf.DLine_mm(tsti, (xmin2,  rV + m0*xmin2+b0), (xmax2,  rV + m0*xmax2+b0), 'blue',iscale=tstscale)
-        nf.DLine_mm(tsti, (xmin2, -rV + m0*xmin2+b0), (xmax2, -rV + m0*xmax2+b0), 'green',iscale=tstscale)
-        
 
 
     if False:

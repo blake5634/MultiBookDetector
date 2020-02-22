@@ -4,3 +4,5 @@
 4) "Educate" a deep NN with progressions of synthetic images of increasing difficulty
 5) drop down contour from background at top of image, also up from bottom of image
 6) develop a "corner-finder" look for quads of 4 similar corners.  Concentrate corner search along top/bottom bg contours.
+7) Andy: just find blocks of text, forget about rectangles.  Then OCR them. 
+

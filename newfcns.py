@@ -16,14 +16,14 @@ mm2pix = float(1.0)/pix2mm
 
 deriv_win_size =     int(1.0*mm2pix)      # 1mm width
 smooth_size    = -1* int(10*mm2pix)    # <0:   do not smooth
-blur_rad       =     int(1.0*mm2pix)    # to scaled pixels
+blur_rad       =     int(3.0*mm2pix)    # to scaled pixels
 if blur_rad%2 == 0:   # make it odd # of pixels
     blur_rad += 1   
 
 KM_Clusters = 10
 
 font = cv2.FONT_HERSHEY_SIMPLEX
-colors = {'white':(255,255,255), 'blue':(255,0,0), 'green':(0,255,0), 'red':(0,0,255)}
+colors = {'white':(255,255,255), 'blue':(255,0,0), 'green':(0,255,0), 'red':(0,0,255),'yellow':(0,255,255)}
  
 #
 #  new functions by BH
@@ -144,11 +144,12 @@ def Get_line_score(img, w, xintercept, th, llen,bias, cdist):
     xintercept = where line crosses vertical centerline of image (X=0) (mm)
     th  = angle in deg relative to 03:00 on clock
     llen = length of line segment (mm)
+    bias = vertical shift of the line center (mm)
     cdist = matrix of color distances (Euclid) btwn VQ centers
     '''
-    print('\n\n w: {} xint: {}, th: {}'.format( w,xintercept, th))
-    print(' ---   image shape: {}'.format(np.shape(img)))
-    print('Image sample: {}'.format(img[10,10]))
+    print('\n\nLine Score:   x: {}(mm) , th: {}(deg)'.format( xintercept, th))
+    #print(' ---   image shape: {}'.format(np.shape(img)))
+    #print('Image sample: {}'.format(img[10,10]))
     ih = img.shape[0]
     iw = img.shape[1] 
     xmin, xmax, ymin, ymax = Get_mmBounds(img)  # in mm
@@ -160,11 +161,11 @@ def Get_line_score(img, w, xintercept, th, llen,bias, cdist):
     #window upper bound
     #  rV = distance to upper bound (vertical) mm
     
-    rV  = abs( w/np.cos((180-th)*d2r)) # mm  (a delta / no origin offset)
+    rV  = abs( w/np.cos((180-th)*d2r)) # mm  (a delta so there's no origin offset)
     rVp = int(rV * mm2pix)     # pixels
-    print('m0: {} b0: {}mm rVp:{}(pix)'.format(m0,b0,rVp))
-    print('rV(mm): {:5.2f}'.format(rV))
-    print('th: {} deg, iw {}  ih: {}'.format(th,iw,ih))
+    #print('m0: {} b0: {}mm rVp:{}(pix)'.format(m0,b0,rVp))
+    #print('rV(mm): {:5.2f}'.format(rV))
+    #print('th: {} deg, iw {}  ih: {}'.format(th,iw,ih))
     dx = abs((llen/2)*np.cos(th*d2r)) # mm
     
     xmin2 = xintercept - dx #mm    X range for test line
@@ -183,7 +184,7 @@ def Get_line_score(img, w, xintercept, th, llen,bias, cdist):
     yminp = 0     # pix
     for col in rng:
         x = pix2mm*(col - iw/2) # convert back to mm(!)
-        ymm = m0*x+b0     # line eqn in mm
+        ymm = m0*x+b0 + bias    # line eqn in mm
         row, dummy = XY2RC(img,0,ymm)    # pix
         #print ('X:{} Y{}'.format(x,y),end='')
         if (row > ih-1 or row < 0) or (col > iw-1 or col < 0): # line inside image?
@@ -201,26 +202,30 @@ def Get_line_score(img, w, xintercept, th, llen,bias, cdist):
                 if row1 > yminp:
                     #print('             row range2: {} -- {}'.format(row,row-r))
                     vals_bel.append(Get_pix_byRC(img,row1,col))
-    print('\n\n{} values above'.format(len(vals_abv)))
-    print('{} values below'.format(len(vals_bel)))
+    #print('\n\n{} values above'.format(len(vals_abv)))
+    #print('{} values below'.format(len(vals_bel)))
     if len(vals_abv) > 50 and len(vals_bel) > 50:
         #print('shape vals: {}'.format(np.shape(vals_abv)))
         #print('sample: vals: ', vals_abv[0:10])
         labs_abv, cnts_abv = np.unique(vals_abv, return_counts=True)
         labs_bel, cnts_bel = np.unique(vals_bel, return_counts=True)
-        print('shape: labels_abv: {}, counts_abv: {}   Data: '.format(np.shape(labs_abv),np.shape(cnts_abv)))
+        #print('shape: labels_abv: {}, counts_abv: {}   Data: '.format(np.shape(labs_abv),np.shape(cnts_abv)))
         print(labs_abv, cnts_abv)
-        print('labels: (100 samples)')
-        print(vals_abv[0:100])
+        #print('labels: (100 samples)')
+        #print(vals_abv[0:100])
+        dom_lab_abv = labs_abv[np.argmax(cnts_abv)]
+        dom_lab_bel = labs_bel[np.argmax(cnts_bel)]
         dom_abv = np.max(cnts_abv)/np.sum(cnts_abv)  # how predominant? (0-1)
         dom_bel = np.max(cnts_bel)/np.sum(cnts_bel)  # how predominant? (0-1)
-        color_distance = cdist[np.argmax(cnts_abv),np.argmax(cnts_bel)]
-        cl_abv = labs_abv[np.argmax(cnts_abv)] # most common above
-        cl_bel = labs_bel[np.argmax(cnts_bel)] # most common below
+        #color_distance = cdist[dom_lab_abv],labs_bel[dom_lab_bel]]
+        if dom_lab_abv != dom_lab_bel:
+            color_distance = 350    # to match typical color distances
+        else:
+            color_distance = 0.0
         diff_score = (color_distance)*dom_abv*dom_bel  # weighted difference
         #diff_score = dom_abv*dom_bel
         print('color cluster diff: {:8.3f}'.format(color_distance))
-        print('cl_abv/bel: {}/{} dom_abv/bel: {:5.3f}/{:5.3f}, score:  {}'.format(cl_abv,cl_bel,dom_abv,dom_bel,diff_score))
+        print('cl_abv/bel: {}/{} dom_abv/bel: {:5.3f}/{:5.3f}, score:  {}'.format(dom_lab_abv,dom_lab_bel,dom_abv,dom_bel,diff_score))
         #x = input('pause ...')
     else:
         return 0.0
