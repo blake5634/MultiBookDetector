@@ -99,8 +99,9 @@ for pic_filename in img_paths:
     Line_Score_Thresh = 100
     
     
-    for th in ang_scan_deg:
-        for xmm in linescanx_mm:
+    
+    for xmm in linescanx_mm:
+        for th in ang_scan_deg:
     #if True:
             #(th, xmm) = (140, -40)
             # XY coordinates relative to (img_width/2, img_height/2) +=up
@@ -149,7 +150,7 @@ for pic_filename in img_paths:
         #
         # cluster the lines found.   Get strongest line in each bunch
         #
-        maxgap = 4 #mm   biggest gap inside a bunch
+        maxgap = 10 #mm   biggest gap inside a bunch
         strong_lines = []
         xp = -500 #mm
         lsmax = -99  # max score in a bunch
@@ -158,9 +159,11 @@ for pic_filename in img_paths:
         first = True
         for x,th,score in lines_found:
             if abs(x-xp) > maxgap and not first: # mm
+                print('New Strong Line: x:{} xsmax:{}'.format(x,xsmax))
                 strong_lines.append((xsmax,thmax, lsmax))
                 lsmax = -99
-                continue
+                xp = x
+                next
             if score > lsmax:
                 lsmax = score
                 xsmax = x
@@ -203,6 +206,7 @@ for pic_filename in img_paths:
             colcode = 'red'
         if score > 2.0*Line_Score_Thresh:
             colcode = 'white'
+        colcode = 'yellow'
         nf.DLine_mm(tsti, (xmin2, line_bias + m0*xmin2+b0), (xmax2, line_bias + m0*xmax2+b0), colcode,iscale=tstscale)
         # above window line
         #nf.DLine_mm(tsti, (xmin2,  rV + m0*xmin2+b0), (xmax2,  rV + m0*xmax2+b0), 'blue',iscale=tstscale)
