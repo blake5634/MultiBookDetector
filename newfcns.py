@@ -32,14 +32,15 @@ import matplotlib.pyplot as plt
 #       |
 #       V
 ##
-def Get_pix_byXY(img,X,Y):
+def Get_pix_byXY(img,X,Y,iscale=bpar.scale):
     #print('Get: {} {}'.format(X,Y))
-    row,col = XY2RC(img,X,Y)
+    row,col = XY2RC(img,X,Y,iscale==iscale)
     if col > 500:
         print('  Get_pix_byXY() X:{} Y:{} r:{} c:{}'.format(X,Y,row,col))
     return(img[row,col])
 
-def Get_pix_byRC(img,row,col): 
+def Get_pix_byRC(img,row,col):
+    #print('        get pix: R: {} C: {}'.format(row,col))
     return(img[row,col])
 
 #
@@ -149,13 +150,13 @@ def Get_line_score(img, w, xintercept, th, llen,bias, cdist):
     
     xmin2 = xintercept - dx #mm    X range for test line
     xmax2 = xintercept + dx #mm
-    print('xmin/max2: {:4.2f}mm {:4.2f}mm'.format(xmin2,xmax2))
+    #print('xmin/max2: {:4.2f}mm {:4.2f}mm'.format(xmin2,xmax2))
     # cols,  rows = XY2iXiY()
     xmi2p, dummy =XY2iXiY(img, xmin2,0)  # pix  X range for test line
     xmx2p, dummy =XY2iXiY(img, xmax2,0)
     
     rng = range(xmi2p, xmx2p-1, 1)  # pix cols
-    print('x range: {} -- {}'.format(xmi2p, xmx2p)) 
+    #print('x range: {} -- {}'.format(xmi2p, xmx2p)) 
     #study pixels above and below line at all columns
     vals_abv = []
     vals_bel = []
@@ -165,22 +166,24 @@ def Get_line_score(img, w, xintercept, th, llen,bias, cdist):
         x = bpar.pix2mm*(col - iw/2) # convert back to mm(!)
         ymm = m0*x+b0 + bias    # line eqn in mm
         row, dummy = XY2RC(img,0,ymm)    # pix
-        #print ('X:{} Y{}'.format(x,y),end='')
+        #print ('X/col:{} Ymm:{:4.2f} row:{}'.format(col,ymm,row))
         if (row > ih-1 or row < 0) or (col > iw-1 or col < 0): # line inside image?
             #print('')  # no it's not inside
             continue
         else:
             #print('*')
             # above the line
-            for row1 in range(row,row-rVp,-1): # higher rows "lower"
-                if  row1 < ymaxp:
+            for row1 in range(row,row-rVp,-1): # higher rows #s are "lower"
+                if  row1 > yminp:
                     #print('             row range1: {} -- {}'.format(row,row+r))
-                    vals_abv.append(Get_pix_byRC(img,row1,col)) # accum. labels in zone above
+                    #vals_abv.append(Get_pix_byRC(img,row1,col)) # accum. labels in zone above
+                    vals_abv.append(img[row1,col]) # accum. labels in zone above
             # below the line
             for row1 in range(row, row+rVp,1):
-                if row1 > yminp:
+                if row1 < ymaxp:
                     #print('             row range2: {} -- {}'.format(row,row-r))
-                    vals_bel.append(Get_pix_byRC(img,row1,col))
+                    #vals_bel.append(Get_pix_byRC(img,row1,col))
+                    vals_bel.append(img[row1,col])
     #print('\n\n{} values above'.format(len(vals_abv)))
     #print('{} values below'.format(len(vals_bel)))
     if len(vals_abv) > 50 and len(vals_bel) > 50:
@@ -189,18 +192,24 @@ def Get_line_score(img, w, xintercept, th, llen,bias, cdist):
         labs_abv, cnts_abv = np.unique(vals_abv, return_counts=True)
         labs_bel, cnts_bel = np.unique(vals_bel, return_counts=True)
         #print('shape: labels_abv: {}, counts_abv: {}   Data: '.format(np.shape(labs_abv),np.shape(cnts_abv)))
-        print(labs_abv, cnts_abv)
+        #print(labs_abv, cnts_abv)
         #print('labels: (100 samples)')
         #print(vals_abv[0:100])
         dom_lab_abv = labs_abv[np.argmax(cnts_abv)]
         dom_lab_bel = labs_bel[np.argmax(cnts_bel)]
         dom_abv = np.max(cnts_abv)/np.sum(cnts_abv)  # how predominant? (0-1)
         dom_bel = np.max(cnts_bel)/np.sum(cnts_bel)  # how predominant? (0-1)
-        #color_distance = cdist[dom_lab_abv],labs_bel[dom_lab_bel]]
-        if dom_lab_abv != dom_lab_bel:
-            color_distance = 350    # to match typical color distances
+        Method = bpar.Color_Dist_Method
+        if Method == 1:
+            color_distance = cdist[dom_lab_abv, dom_lab_bel]
+        elif Method == 2:
+            if dom_lab_abv != dom_lab_bel:
+                color_distance = 150    # to match typical color distances
+            else:
+                color_distance = 0.0
         else:
-            color_distance = 0.0
+            print('Illegal color Distance Method (1 or 2)')
+            quit()
         diff_score = (color_distance)*dom_abv*dom_bel  # weighted difference
         #diff_score = dom_abv*dom_bel
         print('color cluster diff: {:8.3f}'.format(color_distance))

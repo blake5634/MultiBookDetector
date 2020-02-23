@@ -89,16 +89,13 @@ for pic_filename in img_paths:
     #
 
     # book shape parameters target
-    sl_wi = 4 #mm # slice window (dist above/below (90deg to line) line) 
-    length = 50  # mm
+    sl_wi = bpar.slice_width #mm # slice window (dist above/below (90deg to line) line) 
+    length = bpar.book_edge_line_length_mm  # mm
 
     linescanx_mm = range(160, -160, -2) #mm
     ang_scan_deg = range(110,170,2)  # deg 
     
     lines_found = []
-    
-    Line_Score_Thresh = 100
-    
     
     
     for xmm in linescanx_mm:
@@ -125,11 +122,10 @@ for pic_filename in img_paths:
             #     Get the line score
             #
             #lscore = 0.99999999
-            line_bias = -20  # mm   (shift line down from Y=0 line)         
-            lscore = nf.Get_line_score(label_img, sl_wi, x1, th, length, line_bias, color_dist)  # x=0, th=125deg
+            lscore = nf.Get_line_score(label_img, sl_wi, x1, th, length, bpar.line_bias, color_dist)  # x=0, th=125deg
             print('X: {} th: {} score: {}'.format(x1, th, lscore))
 
-            if lscore > Line_Score_Thresh:
+            if lscore > bpar.Line_Score_Thresh:
                 print('line at {:4.2f} is important, score ({})'.format(xmm,lscore))
                 lines_found.append((xmm,th,lscore))
         
@@ -151,7 +147,7 @@ for pic_filename in img_paths:
         #
         # cluster the lines found.   Get strongest line in each bunch
         #
-        maxgap = 10 #mm   biggest gap inside a bunch
+        maxgap = bpar.max_gap_mm #mm   biggest gap inside a bunch
         strong_lines = []
         xp = -500 #mm
         lsmax = -99  # max score in a bunch
@@ -199,16 +195,16 @@ for pic_filename in img_paths:
         rng = range(xmi2p, xmx2p-1, 1)  # pix cols
         # the line
         colcode='yellow'
-        if score > 1.1*Line_Score_Thresh:
+        if score > 1.1*bpar.Line_Score_Thresh:
             colcode = 'green'
-        if score > 1.2*Line_Score_Thresh:
+        if score > 1.2*bpar.Line_Score_Thresh:
             colcode = 'blue'
-        if score > 1.6*Line_Score_Thresh:
+        if score > 1.6*bpar.Line_Score_Thresh:
             colcode = 'red'
-        if score > 2.0*Line_Score_Thresh:
+        if score > 2.0*bpar.Line_Score_Thresh:
             colcode = 'white'
         colcode = 'yellow'
-        nf.DLine_mm(tsti, (xmin2, line_bias + m0*xmin2+b0), (xmax2, line_bias + m0*xmax2+b0), colcode,iscale=tstscale)
+        nf.DLine_mm(tsti, (xmin2, bpar.line_bias + m0*xmin2+b0), (xmax2, bpar.line_bias + m0*xmax2+b0), colcode,iscale=tstscale)
         # above window line
         #nf.DLine_mm(tsti, (xmin2,  rV + m0*xmin2+b0), (xmax2,  rV + m0*xmax2+b0), 'blue',iscale=tstscale)
         #nf.DLine_mm(tsti, (xmin2, -rV + m0*xmin2+b0), (xmax2, -rV + m0*xmax2+b0), 'green',iscale=tstscale)
