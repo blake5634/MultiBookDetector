@@ -4,6 +4,7 @@ import numpy as np
 import glob as gb
 from book_hough import *
 import newfcns as nf
+import book_parms as bpar
 import matplotlib.pyplot as plt
 '''
 Test some new functions for 
@@ -39,8 +40,8 @@ for pic_filename in img_paths:
     #     scale factor imported from newfcns.py
     #
         
-    img_width = int(ish[1]/nf.scale)
-    img_height =  int(ish[0]/nf.scale)
+    img_width = int(ish[1]/bpar.scale)
+    img_height =  int(ish[0]/bpar.scale)
     img1 = cv2.resize(img, (img_width, img_height))
     
     ############
@@ -82,7 +83,7 @@ for pic_filename in img_paths:
     trans_line_h = int(0.80*img_height)
     trans_line_dh = int(0.14*img_height)
     
-    bar_thickness = int(60/nf.scale) # how many pixels to study at each x value
+    bar_thickness = int(60/bpar.scale) # how many pixels to study at each x value
     Ntrans = 3
     
     assert trans_line_dh * Ntrans < trans_line_h, 'Illegal horizontal/vertical scan params'
@@ -135,7 +136,7 @@ for pic_filename in img_paths:
         #
         pm1 = tlh   # just draw lines up/down
         i=0
-        A = 30/nf.scale
+        A = 30/bpar.scale
         for p in sline:
             r1 = tlh + int(A*pm1)  #'y1'
             c1 = i-1
@@ -170,7 +171,7 @@ for pic_filename in img_paths:
     
     #  smooth_size defined in newfcns
     
-    swinsize = int(nf.smooth_size/nf.scale)
+    swinsize = int(bpar.smooth_size/bpar.scale)
     if swinsize > 0:
         if swinsize%2==0:  # must be ODD
             swinsize += 1

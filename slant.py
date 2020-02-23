@@ -5,6 +5,7 @@ import time as time
 import glob as gb
 from book_hough import *
 import newfcns as nf
+import book_parms as bpar
 import matplotlib.pyplot as plt
 '''
 Test some new functions for 
@@ -39,7 +40,7 @@ for pic_filename in img_paths:
     #  Standardize the image sizes/scales
     #
     
-    orig_ish, scaled_ish = nf.Get_sizes(img_orig, nf.scale)
+    orig_ish, scaled_ish = nf.Get_sizes(img_orig, bpar.scale)
     
     #
     #
@@ -59,7 +60,7 @@ for pic_filename in img_paths:
     #   blur  
     #
     
-    b = int(nf.blur_rad/nf.scale)
+    b = int(bpar.blur_rad/bpar.scale)
     if b%2 == 0:
         b+=1
     img2 = cv2.GaussianBlur(img1, (b,b), 0)
@@ -69,7 +70,7 @@ for pic_filename in img_paths:
     #
     #  Use KMeans to posterize to N color labels
     #
-    N = nf.KM_Clusters
+    N = bpar.KM_Clusters
     img0, label_img, ctrs, color_dist = nf.KM(img2,N)   
     #print('label_img shape: {}'.format(np.shape(label_img)))
     #cv2.imshow("labeled KM image", img0)
@@ -185,7 +186,7 @@ for pic_filename in img_paths:
         b0 = -m0*x1  # mm 
         rV = sl_wi/np.cos((180-th)*d2r)  # mm
         #rVp, dummy  = nf.XY2RC(tsti,rV,0)  # pixels
-        rVp = int(rV * nf.mm2pix)     # pixels
+        rVp = int(rV * bpar.mm2pix)     # pixels
 
         #print('m0: {} b0: {}mm rp:{}(pix)'.format(m0,b0,rp))
         #print('th: {} deg, iw {}  ih: {}'.format(th,iw,ih))

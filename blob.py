@@ -5,6 +5,7 @@ import time as time
 import glob as gb
 from book_hough import *
 import newfcns as nf
+import book_parms as bpar
 import matplotlib.pyplot as plt
 '''
 Test some new functions for 
@@ -37,8 +38,8 @@ for pic_filename in img_paths:
     #     scale factor imported from newfcns.py
     #
         
-    img_width = int(ish[1]/nf.scale)
-    img_height =  int(ish[0]/nf.scale)
+    img_width = int(ish[1]/bpar.scale)
+    img_height =  int(ish[0]/bpar.scale)
     img1 = cv2.resize(img_orig, (img_width, img_height))
     
     
@@ -56,7 +57,7 @@ for pic_filename in img_paths:
     params.blobColor=255
     # Filter by Area.
     params.filterByArea = True
-    params.minArea = int(700/nf.scale)
+    params.minArea = int(700/bpar.scale)
     # Filter by Circularity
     params.filterByCircularity = False
     params.minCircularity = 0.1
@@ -78,7 +79,7 @@ for pic_filename in img_paths:
     #   blur  
     #
     
-    b = int(nf.blur_rad/nf.scale)
+    b = int(bpar.blur_rad/bpar.scale)
     if b%2 == 0:
         b+=1
     img2 = cv2.GaussianBlur(img1, (b,b), 0)
@@ -141,7 +142,7 @@ for pic_filename in img_paths:
         # Draw detected blobs as red circles.
         # cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS ensures
         # the size of the circle corresponds to the size of blob
-        s2 = nf.scale*nf.scale
+        s2 = bpar.scale*bpar.scale
         ar_min = int(7500/s2)   # for areas use s-squared
         ar_max = int(100000/s2)
         timg = img0.copy()
@@ -207,13 +208,13 @@ for pic_filename in img_paths:
                 ncont+=1
                 cv2.drawContours(timg, c, -1, (255,0,255),3)
                 cv2.drawContours(timg, [obbp], -1, (0,255,0),3)
-                ob2 = [[ val*nf.scale for val in p]  for p in obbp]
-                ob2 = np.array(obbp)*nf.scale
+                ob2 = [[ val*bpar.scale for val in p]  for p in obbp]
+                ob2 = np.array(obbp)*bpar.scale
                 
                 cv2.drawContours(img_orig, [ob2], -1, (0,255,0), 3)
-                xt = nf.scale*cX
-                yt = nf.scale*cY
-                cv2.putText(img_orig, '{}'.format(lab), (xt,yt), nf.font, 1, (255, 255, 0), 2, cv2.LINE_AA)
+                xt = bpar.scale*cX
+                yt = bpar.scale*cY
+                cv2.putText(img_orig, '{}'.format(lab), (xt,yt), bpar.font, 1, (255, 255, 0), 2, cv2.LINE_AA)
 
         print(' ...    {} contours remain'.format(ncont))
         nfound += ncont

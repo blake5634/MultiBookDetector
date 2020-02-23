@@ -1,30 +1,9 @@
 import cv2
 import numpy as np
 import glob as gb
+import book_parms as bpar
 import matplotlib.pyplot as plt
 
-scale = 3   # downsample image by this much
-
-#   ~5.0 pix / mm  (measured from original target img)
-
-pix2mm = float(.2) * float(scale)   # convert pix * pix2mm = xx mm
-                                   # measure off unscaled target image
-mm2pix = float(1.0)/pix2mm 
-
-#  following smoothing windows are scaled from here by /scale
-#     values below reflect a nominal image width of 1670
-
-deriv_win_size =     int(1.0*mm2pix)      # 1mm width
-smooth_size    = -1* int(10*mm2pix)    # <0:   do not smooth
-blur_rad       =     int(8.0*mm2pix)    # to scaled pixels
-if blur_rad%2 == 0:   # make it odd # of pixels
-    blur_rad += 1   
-
-KM_Clusters = 15
-
-font = cv2.FONT_HERSHEY_SIMPLEX
-colors = {'white':(255,255,255), 'blue':(255,0,0), 'green':(0,255,0), 'red':(0,0,255),'yellow':(0,255,255)}
- 
 #
 #  new functions by BH
 #
@@ -66,39 +45,39 @@ def Get_pix_byRC(img,row,col):
 #
 # convert image ctr XY(mm) to X,Y (open CV point)
 #
-def XY2iXiY(img,X,Y,iscale=scale):
-    if iscale != scale:   # mm2pix has scale in it so..
-        f = float(scale)/float(iscale)
+def XY2iXiY(img,X,Y,iscale=bpar.scale):
+    if iscale != bpar.scale:   # bpar.mm2pix has scale in it so..
+        f = float(bpar.scale)/float(iscale)
         X *= f
         Y *= f
-    row = int( -Y*mm2pix + int(img.shape[0]/2) )
-    col = int(  X*mm2pix + int(img.shape[1]/2) )
+    row = int( -Y*bpar.mm2pix + int(img.shape[0]/2) )
+    col = int(  X*bpar.mm2pix + int(img.shape[1]/2) )
     iX = col
     iY = row
     return iX, iY
 #
 # convert image ctr XY(mm) to Row, Col 
 #
-def XY2RC(img,X,Y,iscale=scale):
-    if iscale != scale:
-        f = float(scale)/float(iscale)
+def XY2RC(img,X,Y,iscale=bpar.scale):
+    if iscale != bpar.scale:
+        f = float(bpar.scale)/float(iscale)
         X *= f
         Y *= f
-    row = int( -Y*mm2pix + int(img.shape[0]/2) )
-    col = int(  X*mm2pix + int(img.shape[1]/2) )
+    row = int( -Y*bpar.mm2pix + int(img.shape[0]/2) )
+    col = int(  X*bpar.mm2pix + int(img.shape[1]/2) )
     return row,col
 
 #
 #  Get image bounds in mm  
 #
-def Get_mmBounds(img,iscale=scale):
+def Get_mmBounds(img,iscale=bpar.scale):
     sh = np.shape(img)  # get rows & cols
-    xmin = -1* (sh[1]*pix2mm/2)  # pix2mm factor includes scale
+    xmin = -1* (sh[1]*bpar.pix2mm/2)  # bpar.pix2mm factor includes bpar.scale
     xmax = -1*xmin
-    ymin = -1* (sh[0]*pix2mm/2)
+    ymin = -1* (sh[0]*bpar.pix2mm/2)
     ymax = -1*ymin
-    if iscale != scale:
-        f = float(iscale)/float(scale)
+    if iscale != bpar.scale:
+        f = float(bpar.scale)/float(bpar.scale)
         xmin *= f
         xmax *= f
         ymin *= f
@@ -109,15 +88,15 @@ def Get_mmBounds(img,iscale=scale):
 #
 #  if image scale is different from "scale" then use param
 #
-def DLine_mm(img, p1, p2, st_color, width=3,iscale=scale):
-    p1_pix = XY2iXiY(img, p1[0],p1[1],iscale=iscale)
-    p2_pix = XY2iXiY(img, p2[0],p2[1],iscale=iscale)    # allows for change of scale 
-    cv2.line(img, p1_pix, p2_pix, colors[st_color], width)
+def DLine_mm(img, p1, p2, st_color, width=3,iscale=bpar.scale):
+    p1_pix = XY2iXiY(img, p1[0],p1[1], iscale=iscale)
+    p2_pix = XY2iXiY(img, p2[0],p2[1], iscale=iscale)    # allows for change of scale 
+    cv2.line(img, p1_pix, p2_pix, bpar.colors[st_color], width)
     
-def DRect_mm(img,  p1, p2, st_color, width=3,iscale=scale):
-    p1_pix = XY2iXiY(img, p1[0],p1[1],iscale=iscale)
-    p2_pix = XY2iXiY(img, p2[0],p2[1],iscale=iscale)
-    cv2.rectangle(img, p1_pix, p2_pix, colors[st_color], width)
+def DRect_mm(img,  p1, p2, st_color, width=3,iscale=bpar.scale):
+    p1_pix = XY2iXiY(img, p1[0],p1[1], iscale=iscale)
+    p2_pix = XY2iXiY(img, p2[0],p2[1], iscale=iscale)
+    cv2.rectangle(img, p1_pix, p2_pix, bpar.colors[st_color], width)
  
 #
 #  Return standard image size references
@@ -162,7 +141,7 @@ def Get_line_score(img, w, xintercept, th, llen,bias, cdist):
     #  rV = distance to upper bound (vertical) mm
     
     rV  = abs( w/np.cos((180-th)*d2r)) # mm  (a delta so there's no origin offset)
-    rVp = int(rV * mm2pix)     # pixels
+    rVp = int(rV * bpar.mm2pix)     # pixels
     #print('m0: {} b0: {}mm rVp:{}(pix)'.format(m0,b0,rVp))
     #print('rV(mm): {:5.2f}'.format(rV))
     #print('th: {} deg, iw {}  ih: {}'.format(th,iw,ih))
@@ -183,7 +162,7 @@ def Get_line_score(img, w, xintercept, th, llen,bias, cdist):
     ymaxp = ih    # pix, same as image rows
     yminp = 0     # pix
     for col in rng:
-        x = pix2mm*(col - iw/2) # convert back to mm(!)
+        x = bpar.pix2mm*(col - iw/2) # convert back to mm(!)
         ymm = m0*x+b0 + bias    # line eqn in mm
         row, dummy = XY2RC(img,0,ymm)    # pix
         #print ('X:{} Y{}'.format(x,y),end='')
@@ -428,7 +407,7 @@ def Gen_cluster_colors(centers):
         if i >= 10:
             break
         cv2.rectangle(img, (x,y), (iw,y+h), col, FILLED)
-        cv2.putText(img, 'cluster: {}'.format(i), (50, y+50), font, 1, (255, 255, 0), 2, cv2.LINE_AA)
+        cv2.putText(img, 'cluster: {}'.format(i), (50, y+50), bpar.font, 1, (255, 255, 0), 2, cv2.LINE_AA)
         y=y + h
     return img
 #   
